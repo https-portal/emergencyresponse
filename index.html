@@ -110,13 +110,19 @@
 
   <!-- Style -->
   <style>
+    * {
+      box-sizing: border-box;
+    }
+
     body {
       margin: 0;
       font-family: Arial, sans-serif;
       display: flex;
+      flex-direction: row;
       height: 100vh;
       overflow: hidden;
     }
+
     #sidebar {
       width: 350px;
       background: #f7f7f7;
@@ -125,18 +131,24 @@
       overflow-y: auto;
       display: flex;
       flex-direction: column;
+      transition: all 0.3s ease;
     }
+
     #map {
       flex: 1;
+      height: 100vh;
     }
+
     h2 {
       margin-top: 0;
       text-align: center;
     }
+
     .top-buttons {
       text-align: center;
       margin-bottom: 15px;
     }
+
     .top-buttons a {
       display: inline-block;
       background: #007bff;
@@ -147,9 +159,11 @@
       font-weight: bold;
       transition: background 0.3s;
     }
+
     .top-buttons a:hover {
       background: #0056b3;
     }
+
     .request-item {
       background: #fff;
       padding: 10px;
@@ -157,6 +171,7 @@
       box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
       margin-bottom: 10px;
     }
+
     .request-item button {
       background: #e74c3c;
       color: white;
@@ -165,6 +180,7 @@
       border-radius: 5px;
       cursor: pointer;
     }
+
     .request-item button:hover {
       background: #c0392b;
     }
@@ -175,6 +191,7 @@
       width: 20px;
       height: 20px;
     }
+
     .pulsing-marker .dot {
       position: absolute;
       width: 12px;
@@ -185,6 +202,7 @@
       border-radius: 50%;
       box-shadow: 0 0 10px rgba(255, 0, 0, 0.8);
     }
+
     .pulsing-marker .pulse {
       position: absolute;
       width: 12px;
@@ -195,10 +213,39 @@
       background: rgba(255, 0, 0, 0.4);
       animation: pulse 1.5s ease-out infinite;
     }
+
     @keyframes pulse {
       0% { transform: scale(1); opacity: 0.8; }
       70% { transform: scale(3); opacity: 0; }
       100% { transform: scale(1); opacity: 0; }
+    }
+
+    /* ✅ Mobile Responsive */
+    @media (max-width: 768px) {
+      body {
+        flex-direction: column;
+      }
+
+      #sidebar {
+        width: 100%;
+        height: auto;
+        max-height: 45vh;
+        border-right: none;
+        border-bottom: 1px solid #ccc;
+      }
+
+      #map {
+        height: 55vh;
+      }
+
+      .request-item {
+        font-size: 14px;
+      }
+
+      .top-buttons a {
+        display: block;
+        width: 100%;
+      }
     }
   </style>
 </head>
