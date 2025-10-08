@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Emergency Requests Map</title>
+
+  <!-- Firebase + Leaflet -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js";
+    import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBWt99TXD-yWrlDuU6TPEZVMPrDQGV3Y-w",
+      authDomain: "emergency-response-927b4.firebaseapp.com",
+      projectId: "emergency-response-927b4",
+      storageBucket: "emergency-response-927b4.appspot.com",
+      messagingSenderId: "764143976759",
+      appId: "1:764143976759:web:340b2fa2834b6406439ab2",
+      measurementId: "G-Z0479KDD64",
+      databaseURL: "https://emergency-response-927b4-default-rtdb.firebaseio.com"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    let map, markersLayer;
+
+    // ✅ Pulsing red marker
+    const pulsingIcon = L.divIcon({
+      className: "",
+      html: `<div class="pulsing-marker"><div class="pulse"></div><div class="dot"></div></div>`,
+      iconSize: [20, 20],
+      iconAnchor: [10, 10],
+    });
+
+    function addMarker(data) {
+      const lat = parseFloat(data.latitude);
+      const lng = parseFloat(data.longitude);
+      if (isNaN(lat) || isNaN(lng)) return;
+
+      const marker = L.marker([lat, lng], { icon: pulsingIcon });
+
+      const photoHtml = data.photo
+        ? `<img src="${data.photo}" alt="Photo" style="width:100%;max-height:200px;border-radius:8px;margin-top:5px;">`
+        : "";
+
+      marker.bindPopup(`
+        <strong>${data.requestor || "Unknown"}</strong><br>
+        <em>${data.status || "No status"}</em><br>
+        <b>Municipality:</b> ${data.municipality || "N/A"}<br>
+        <b>Barangay:</b> ${data.barangay || "N/A"}<br>
+        <b>Landmark:</b> ${data.landmark || "N/A"}<br>
+        <b>Contact:</b> ${data.contact || "N/A"}<br>
+        <b>Date:</b> ${data.date || "N/A"}<br>
+        ${photoHtml}
+        <br>
+        <a href="https://www.google.com/maps?q=${lat},${lng}" target="_blank"
+           style="display:inline-block;margin-top:8px;background:#007bff;color:white;
+           padding:5px 10px;border-radius:4px;text-decoration:none;">
+           📍 View on Google Maps
+        </a>
+      `);
+      marker.addTo(markersLayer);
+    }
+
+    function displayRequests(requests) {
+      const list = document.getElementById("requestList");
+      list.innerHTML = "";
+      markersLayer.clearLayers();
+
+      Object.entries(requests).forEach(([key, data]) => {
+        addMarker(data);
+
+        const item = document.createElement("div");
+        item.className = "request-item";
+        item.innerHTML = `
+          <h4>${data.requestor || "Unknown"}</h4>
+          <p><b>Status:</b> ${data.status || "No status"}</p>
+          <p>${data.municipality || ""}, ${data.barangay || ""}</p>
+          <button onclick="zoomTo(${data.latitude}, ${data.longitude})">View on Map</button>
+        `;
+        list.appendChild(item);
+      });
+    }
+
+    window.zoomTo = (lat, lng) => {
+      map.setView([lat, lng], 16);
+    };
+
+    window.addEventListener("DOMContentLoaded", () => {
+      map = L.map("map").setView([10.3157, 123.8854], 9);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "© OpenStreetMap contributors"
+      }).addTo(map);
+
+      markersLayer = L.layerGroup().addTo(map);
+
+      const reqRef = ref(db, "emergency_requests");
+      onValue(reqRef, (snapshot) => {
+        const data = snapshot.val() || {};
+        displayRequests(data);
+      });
+    });
+  </script>
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- Style -->
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+    }
+    #sidebar {
+      width: 350px;
+      background: #f7f7f7;
+      border-right: 1px solid #ccc;
+      padding: 15px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+    }
+    #map {
+      flex: 1;
+    }
+    h2 {
+      margin-top: 0;
+      text-align: center;
+    }
+    .top-buttons {
+      text-align: center;
+      margin-bottom: 15px;
+    }
+    .top-buttons a {
+      display: inline-block;
+      background: #007bff;
+      color: white;
+      padding: 8px 12px;
+      border-radius: 6px;
+      text-decoration: none;
+      font-weight: bold;
+      transition: background 0.3s;
+    }
+    .top-buttons a:hover {
+      background: #0056b3;
+    }
+    .request-item {
+      background: #fff;
+      padding: 10px;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      margin-bottom: 10px;
+    }
+    .request-item button {
+      background: #e74c3c;
+      color: white;
+      border: none;
+      padding: 6px 10px;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    .request-item button:hover {
+      background: #c0392b;
+    }
+
+    /* ✅ Pulsing marker styles */
+    .pulsing-marker {
+      position: relative;
+      width: 20px;
+      height: 20px;
+    }
+    .pulsing-marker .dot {
+      position: absolute;
+      width: 12px;
+      height: 12px;
+      top: 4px;
+      left: 4px;
+      background: red;
+      border-radius: 50%;
+      box-shadow: 0 0 10px rgba(255, 0, 0, 0.8);
+    }
+    .pulsing-marker .pulse {
+      position: absolute;
+      width: 12px;
+      height: 12px;
+      top: 4px;
+      left: 4px;
+      border-radius: 50%;
+      background: rgba(255, 0, 0, 0.4);
+      animation: pulse 1.5s ease-out infinite;
+    }
+    @keyframes pulse {
+      0% { transform: scale(1); opacity: 0.8; }
+      70% { transform: scale(3); opacity: 0; }
+      100% { transform: scale(1); opacity: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div id="sidebar">
+    <div class="top-buttons">
+      <a href="request.html">➕ Submit Request</a>
+    </div>
+    <h2>📍 Emergency Requests</h2>
+    <div id="requestList">Loading...</div>
+  </div>
+  <div id="map"></div>
+</body>
+</html>
