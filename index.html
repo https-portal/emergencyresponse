@@ -1,14 +1,21 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Emergency Requests Map</title>
 
-  <!-- Firebase + Leaflet -->
+  <!-- Leaflet CSS & JS (load before module so `L` is available) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js";
-    import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js";
+    import {
+      getFirestore,
+      collection,
+      onSnapshot
+    } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBWt99TXD-yWrlDuU6TPEZVMPrDQGV3Y-w",
@@ -17,16 +24,15 @@
       storageBucket: "emergency-response-927b4.appspot.com",
       messagingSenderId: "764143976759",
       appId: "1:764143976759:web:340b2fa2834b6406439ab2",
-      measurementId: "G-Z0479KDD64",
-      databaseURL: "https://emergency-response-927b4-default-rtdb.firebaseio.com"
+      measurementId: "G-Z0479KDD64"
     };
 
     const app = initializeApp(firebaseConfig);
-    const db = getDatabase(app);
+    const db = getFirestore(app);
+    const requestsCol = collection(db, "emergency_requests");
 
     let map, markersLayer;
 
-    // ✅ Pulsing red marker
     const pulsingIcon = L.divIcon({
       className: "",
       html: `<div class="pulsing-marker"><div class="pulse"></div><div class="dot"></div></div>`,
@@ -34,227 +40,228 @@
       iconAnchor: [10, 10],
     });
 
-    function addMarker(data) {
-      const lat = parseFloat(data.latitude);
-      const lng = parseFloat(data.longitude);
-      if (isNaN(lat) || isNaN(lng)) return;
-
-      const marker = L.marker([lat, lng], { icon: pulsingIcon });
-
-      const photoHtml = data.photo
-        ? `<img src="${data.photo}" alt="Photo" style="width:100%;max-height:200px;border-radius:8px;margin-top:5px;">`
-        : "";
-
-      marker.bindPopup(`
-        <strong>${data.requestor || "Unknown"}</strong><br>
-        <em>${data.status || "No status"}</em><br>
-        <b>Municipality:</b> ${data.municipality || "N/A"}<br>
-        <b>Barangay:</b> ${data.barangay || "N/A"}<br>
-        <b>Landmark:</b> ${data.landmark || "N/A"}<br>
-        <b>Contact:</b> ${data.contact || "N/A"}<br>
-        <b>Date:</b> ${data.date || "N/A"}<br>
-        ${photoHtml}
-        <br>
-        <a href="https://www.google.com/maps?q=${lat},${lng}" target="_blank"
-           style="display:inline-block;margin-top:8px;background:#007bff;color:white;
-           padding:5px 10px;border-radius:4px;text-decoration:none;">
-           📍 View on Google Maps
-        </a>
-      `);
-      marker.addTo(markersLayer);
+    const addressCache = new Map();
+    async function reverseGeocode(lat, lng) {
+      const key = `${Number(lat).toFixed(5)},${Number(lng).toFixed(5)}`;
+      if (addressCache.has(key)) return addressCache.get(key);
+      try {
+        const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}`;
+        const r = await fetch(url, { headers: { Accept: "application/json" }});
+        if (!r.ok) throw new Error(r.statusText);
+        const j = await r.json();
+        const addr = j.display_name || `${lat}, ${lng}`;
+        addressCache.set(key, addr);
+        return addr;
+      } catch {
+        const fallback = `${lat}, ${lng}`;
+        addressCache.set(key, fallback);
+        return fallback;
+      }
     }
 
-    function displayRequests(requests) {
-      const list = document.getElementById("requestList");
-      list.innerHTML = "";
+    function buildPopupContent(data) {
+      const wrapper = document.createElement('div');
+
+      const name = document.createElement('strong');
+      name.textContent = data.requestor || 'Unknown';
+      wrapper.appendChild(name);
+
+      const status = document.createElement('div');
+      status.textContent = `Status: ${data.status || 'No status'}`;
+      wrapper.appendChild(status);
+
+      const addressDiv = document.createElement('div');
+      if (data.address) {
+        addressDiv.textContent = `Address: ${data.address}`;
+      } else {
+        addressDiv.textContent = 'Address: resolving...';
+        const lat = Number(data.latitude), lng = Number(data.longitude);
+        if (!isNaN(lat) && !isNaN(lng)) {
+          reverseGeocode(lat, lng).then(a => { addressDiv.textContent = `Address: ${a}`; });
+        } else {
+          addressDiv.textContent = 'Address: N/A';
+        }
+      }
+      wrapper.appendChild(addressDiv);
+
+      const contact = document.createElement('div');
+      contact.textContent = `Contact: ${data.contact || 'N/A'}`;
+      wrapper.appendChild(contact);
+
+      const date = document.createElement('div');
+      try {
+        date.textContent = `Date: ${data.date ? new Date(data.date).toLocaleString() : (data.date || 'N/A')}`;
+      } catch {
+        date.textContent = `Date: ${data.date || 'N/A'}`;
+      }
+      wrapper.appendChild(date);
+
+      if (data.photo) {
+        const img = document.createElement('img');
+        img.src = data.photo;
+        img.alt = 'Photo';
+        img.style.width = '100%';
+        img.style.maxHeight = '200px';
+        img.style.borderRadius = '8px';
+        img.style.marginTop = '6px';
+        wrapper.appendChild(img);
+      }
+
+      const lat = Number(data.latitude), lng = Number(data.longitude);
+      const link = document.createElement('a');
+      if (!isNaN(lat) && !isNaN(lng)) {
+        link.href = `https://www.google.com/maps?q=${lat},${lng}`;
+        link.target = '_blank';
+        link.rel = 'noopener';
+      } else {
+        link.href = '#';
+        link.rel = 'noopener';
+      }
+      link.textContent = '📍 View on Google Maps';
+      link.style.display = 'inline-block';
+      link.style.marginTop = '8px';
+      link.style.background = '#007bff';
+      link.style.color = 'white';
+      link.style.padding = '5px 10px';
+      link.style.borderRadius = '4px';
+      link.style.textDecoration = 'none';
+      wrapper.appendChild(link);
+
+      return wrapper;
+    }
+
+    function addMarker(id, data) {
+      const lat = Number(data.latitude), lng = Number(data.longitude);
+      if (isNaN(lat) || isNaN(lng)) return null;
+      const marker = L.marker([lat, lng], { icon: pulsingIcon });
+      marker.bindPopup(buildPopupContent(data));
+      marker._reqId = id;
+      marker.addTo(markersLayer);
+      return marker;
+    }
+
+    function createRequestItem(id, data) {
+      const item = document.createElement('div');
+      item.className = 'request-item';
+
+      const h = document.createElement('h4');
+      h.textContent = data.requestor || 'Unknown';
+      item.appendChild(h);
+
+      const pStatus = document.createElement('p');
+      pStatus.textContent = `Status: ${data.status || 'No status'}`;
+      item.appendChild(pStatus);
+
+      const pAddress = document.createElement('p');
+      pAddress.textContent = data.address ? `Address: ${data.address}` : `Address: (${data.latitude}, ${data.longitude}) — resolving...`;
+      item.appendChild(pAddress);
+
+      if (!data.address) {
+        const lat = Number(data.latitude), lng = Number(data.longitude);
+        if (!isNaN(lat) && !isNaN(lng)) {
+          reverseGeocode(lat, lng).then(a => { pAddress.textContent = `Address: ${a}`; });
+        } else {
+          pAddress.textContent = 'Address: N/A';
+        }
+      }
+
+      const btn = document.createElement('button');
+      btn.textContent = 'View on Map';
+      btn.addEventListener('click', () => {
+        const lat = Number(data.latitude), lng = Number(data.longitude);
+        if (!isNaN(lat) && !isNaN(lng)) map.setView([lat, lng], 16);
+        else alert('No valid coordinates.');
+      });
+      item.appendChild(btn);
+
+      return item;
+    }
+
+    const markersById = new Map();
+
+    function renderDocs(docs) {
+      const list = document.getElementById('requestList');
+      list.innerHTML = '';
       markersLayer.clearLayers();
+      markersById.clear();
 
-      Object.entries(requests).forEach(([key, data]) => {
-        addMarker(data);
+      if (!docs || docs.length === 0) {
+        list.textContent = 'No requests found.';
+        return;
+      }
 
-        const item = document.createElement("div");
-        item.className = "request-item";
-        item.innerHTML = `
-          <h4>${data.requestor || "Unknown"}</h4>
-          <p><b>Status:</b> ${data.status || "No status"}</p>
-          <p>${data.municipality || ""}, ${data.barangay || ""}</p>
-          <button onclick="zoomTo(${data.latitude}, ${data.longitude})">View on Map</button>
-        `;
+      docs.forEach(docSnap => {
+        const id = docSnap.id;
+        const data = docSnap.data() || {};
+        const marker = addMarker(id, data);
+        if (marker) markersById.set(id, marker);
+        const item = createRequestItem(id, data);
         list.appendChild(item);
       });
+
+      const layers = markersLayer.getLayers();
+      if (layers.length) {
+        const group = L.featureGroup(layers);
+        map.fitBounds(group.getBounds(), { padding: [50,50] });
+      }
+
+      const params = new URLSearchParams(window.location.search);
+      const qlat = parseFloat(params.get('lat'));
+      const qlng = parseFloat(params.get('lng'));
+      if (!isNaN(qlat) && !isNaN(qlng)) {
+        map.setView([qlat, qlng], 16);
+        const nearest = Array.from(markersById.values()).find(m => {
+          const pos = m.getLatLng && m.getLatLng();
+          return pos && Math.abs(pos.lat - qlat) < 0.0005 && Math.abs(pos.lng - qlng) < 0.0005;
+        });
+        if (nearest) nearest.openPopup();
+      }
     }
 
-    window.zoomTo = (lat, lng) => {
-      map.setView([lat, lng], 16);
-    };
+    window.addEventListener('DOMContentLoaded', () => {
+      try {
+        map = L.map('map').setView([10.3157,123.8854], 9);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
 
-    window.addEventListener("DOMContentLoaded", () => {
-      map = L.map("map").setView([10.3157, 123.8854], 9);
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution: "© OpenStreetMap contributors"
-      }).addTo(map);
+        markersLayer = L.layerGroup().addTo(map);
 
-      markersLayer = L.layerGroup().addTo(map);
-
-      const reqRef = ref(db, "emergency_requests");
-      onValue(reqRef, (snapshot) => {
-        const data = snapshot.val() || {};
-        displayRequests(data);
-      });
+        onSnapshot(requestsCol, (snapshot) => {
+          renderDocs(snapshot.docs);
+        }, (err) => {
+          console.error('Failed to load requests:', err);
+          const list = document.getElementById('requestList');
+          list.textContent = 'Failed to load requests.';
+        });
+      } catch (err) {
+        console.error('Initialization error:', err);
+        const list = document.getElementById('requestList');
+        if (list) list.textContent = 'Initialization error. Check console.';
+      }
     });
   </script>
 
-  <!-- Leaflet CSS -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
-  <!-- Style -->
   <style>
-    * {
-      box-sizing: border-box;
-    }
-
-    body {
-      margin: 0;
-      font-family: Arial, sans-serif;
-      display: flex;
-      flex-direction: row;
-      height: 100vh;
-      overflow: hidden;
-    }
-
-    #sidebar {
-      width: 350px;
-      background: #f7f7f7;
-      border-right: 1px solid #ccc;
-      padding: 15px;
-      overflow-y: auto;
-      display: flex;
-      flex-direction: column;
-      transition: all 0.3s ease;
-    }
-
-    #map {
-      flex: 1;
-      height: 100vh;
-    }
-
-    h2 {
-      margin-top: 0;
-      text-align: center;
-    }
-
-    .top-buttons {
-      text-align: center;
-      margin-bottom: 15px;
-    }
-
-    .top-buttons a {
-      display: inline-block;
-      background: #007bff;
-      color: white;
-      padding: 8px 12px;
-      border-radius: 6px;
-      text-decoration: none;
-      font-weight: bold;
-      transition: background 0.3s;
-    }
-
-    .top-buttons a:hover {
-      background: #0056b3;
-    }
-
-    .request-item {
-      background: #fff;
-      padding: 10px;
-      border-radius: 8px;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-      margin-bottom: 10px;
-    }
-
-    .request-item button {
-      background: #e74c3c;
-      color: white;
-      border: none;
-      padding: 6px 10px;
-      border-radius: 5px;
-      cursor: pointer;
-    }
-
-    .request-item button:hover {
-      background: #c0392b;
-    }
-
-    /* ✅ Pulsing marker styles */
-    .pulsing-marker {
-      position: relative;
-      width: 20px;
-      height: 20px;
-    }
-
-    .pulsing-marker .dot {
-      position: absolute;
-      width: 12px;
-      height: 12px;
-      top: 4px;
-      left: 4px;
-      background: red;
-      border-radius: 50%;
-      box-shadow: 0 0 10px rgba(255, 0, 0, 0.8);
-    }
-
-    .pulsing-marker .pulse {
-      position: absolute;
-      width: 12px;
-      height: 12px;
-      top: 4px;
-      left: 4px;
-      border-radius: 50%;
-      background: rgba(255, 0, 0, 0.4);
-      animation: pulse 1.5s ease-out infinite;
-    }
-
-    @keyframes pulse {
-      0% { transform: scale(1); opacity: 0.8; }
-      70% { transform: scale(3); opacity: 0; }
-      100% { transform: scale(1); opacity: 0; }
-    }
-
-    /* ✅ Mobile Responsive */
-    @media (max-width: 768px) {
-      body {
-        flex-direction: column;
-      }
-
-      #sidebar {
-        width: 100%;
-        height: auto;
-        max-height: 45vh;
-        border-right: none;
-        border-bottom: 1px solid #ccc;
-      }
-
-      #map {
-        height: 55vh;
-      }
-
-      .request-item {
-        font-size: 14px;
-      }
-
-      .top-buttons a {
-        display: block;
-        width: 100%;
-      }
-    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Arial,Helvetica,sans-serif;display:flex;height:100vh;overflow:hidden}
+    #sidebar{width:350px;padding:15px;background:#f7f7f7;border-right:1px solid #ccc;overflow:auto}
+    #map{flex:1;height:100vh}
+    .top-buttons{text-align:center;margin-bottom:15px}
+    .top-buttons a{display:inline-block;background:#007bff;color:#fff;padding:8px 12px;border-radius:6px;text-decoration:none}
+    .request-item{background:#fff;padding:10px;border-radius:8px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,0.08)}
+    .request-item button{background:#e74c3c;color:#fff;border:0;padding:6px 10px;border-radius:5px;cursor:pointer}
+    .pulsing-marker{position:relative;width:20px;height:20px}
+    .pulsing-marker .dot{position:absolute;width:12px;height:12px;top:4px;left:4px;background:red;border-radius:50%;box-shadow:0 0 10px rgba(255,0,0,0.8)}
+    .pulsing-marker .pulse{position:absolute;width:12px;height:12px;top:4px;left:4px;border-radius:50%;background:rgba(255,0,0,0.4);animation:pulse 1.5s ease-out infinite}
+    @keyframes pulse{0%{transform:scale(1);opacity:.8}70%{transform:scale(3);opacity:0}100%{transform:scale(1);opacity:0}}
+    @media(max-width:768px){body{flex-direction:column}#sidebar{width:100%;max-height:45vh;border-right:0;border-bottom:1px solid #ccc}#map{height:55vh}}
   </style>
 </head>
 <body>
   <div id="sidebar">
-    <div class="top-buttons">
-      <a href="request.html">➕ Submit Request</a>
-    </div>
-    <h2>📍 Emergency Requests</h2>
+    <div class="top-buttons"><a href="request.html">➕ Submit Request</a> <a href="admin.html" style="margin-left:8px">⚙️ Admin</a></div>
+    <h2 style="margin-top:0;text-align:center">📍 Emergency Requests</h2>
     <div id="requestList">Loading...</div>
   </div>
   <div id="map"></div>
