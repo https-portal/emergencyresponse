@@ -243,19 +243,217 @@
   </script>
 
   <style>
-    *{box-sizing:border-box}
-    body{margin:0;font-family:Arial,Helvetica,sans-serif;display:flex;height:100vh;overflow:hidden}
-    #sidebar{width:350px;padding:15px;background:#f7f7f7;border-right:1px solid #ccc;overflow:auto}
-    #map{flex:1;height:100vh}
-    .top-buttons{text-align:center;margin-bottom:15px}
-    .top-buttons a{display:inline-block;background:#007bff;color:#fff;padding:8px 12px;border-radius:6px;text-decoration:none}
-    .request-item{background:#fff;padding:10px;border-radius:8px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,0.08)}
-    .request-item button{background:#e74c3c;color:#fff;border:0;padding:6px 10px;border-radius:5px;cursor:pointer}
-    .pulsing-marker{position:relative;width:20px;height:20px}
-    .pulsing-marker .dot{position:absolute;width:12px;height:12px;top:4px;left:4px;background:red;border-radius:50%;box-shadow:0 0 10px rgba(255,0,0,0.8)}
-    .pulsing-marker .pulse{position:absolute;width:12px;height:12px;top:4px;left:4px;border-radius:50%;background:rgba(255,0,0,0.4);animation:pulse 1.5s ease-out infinite}
-    @keyframes pulse{0%{transform:scale(1);opacity:.8}70%{transform:scale(3);opacity:0}100%{transform:scale(1);opacity:0}}
-    @media(max-width:768px){body{flex-direction:column}#sidebar{width:100%;max-height:45vh;border-right:0;border-bottom:1px solid #ccc}#map{height:55vh}}
+    * { box-sizing: border-box; }
+    
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', 'Roboto', -apple-system, BlinkMacSystemFont, sans-serif;
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+      background: #f5f7fa;
+    }
+    
+    #sidebar {
+      width: 360px;
+      padding: 20px;
+      background: linear-gradient(180deg, #ffffff 0%, #f8f9fa 100%);
+      border-right: 1px solid #e0e0e0;
+      overflow-y: auto;
+      box-shadow: 2px 0 8px rgba(0,0,0,0.05);
+      display: flex;
+      flex-direction: column;
+    }
+    
+    #sidebar h2 {
+      margin: 0 0 20px 0;
+      font-size: 18px;
+      color: #2c3e50;
+      font-weight: 700;
+      text-align: center;
+    }
+    
+    #map {
+      flex: 1;
+      height: 100vh;
+    }
+    
+    .top-buttons {
+      text-align: center;
+      margin-bottom: 20px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    
+    .top-buttons a {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+      color: #fff;
+      padding: 10px 14px;
+      border-radius: 8px;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 12px;
+      transition: all 0.3s ease;
+      box-shadow: 0 2px 8px rgba(0, 86, 179, 0.2);
+      flex: 1;
+      min-width: 130px;
+      justify-content: center;
+    }
+    
+    .top-buttons a:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 86, 179, 0.3);
+    }
+    
+    .request-item {
+      background: white;
+      padding: 14px;
+      border-radius: 10px;
+      margin-bottom: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      transition: all 0.3s ease;
+      border-left: 4px solid #d32f2f;
+    }
+    
+    .request-item:hover {
+      transform: translateX(4px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    }
+    
+    .request-item h4 {
+      margin: 0 0 8px 0;
+      font-size: 14px;
+      color: #1a1a1a;
+      font-weight: 700;
+    }
+    
+    .request-item p {
+      margin: 6px 0;
+      font-size: 12px;
+      color: #555;
+      line-height: 1.4;
+    }
+    
+    .request-item button {
+      background: linear-gradient(135deg, #d32f2f 0%, #f57c00 100%);
+      color: #fff;
+      border: 0;
+      padding: 8px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 12px;
+      width: 100%;
+      margin-top: 10px;
+      transition: all 0.3s ease;
+      box-shadow: 0 2px 6px rgba(211, 47, 47, 0.2);
+    }
+    
+    .request-item button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 10px rgba(211, 47, 47, 0.3);
+    }
+    
+    .request-item button:active {
+      transform: translateY(0);
+    }
+    
+    .pulsing-marker {
+      position: relative;
+      width: 20px;
+      height: 20px;
+    }
+    
+    .pulsing-marker .dot {
+      position: absolute;
+      width: 12px;
+      height: 12px;
+      top: 4px;
+      left: 4px;
+      background: #d32f2f;
+      border-radius: 50%;
+      box-shadow: 0 0 0 2px white, 0 0 10px rgba(211, 47, 47, 0.8);
+    }
+    
+    .pulsing-marker .pulse {
+      position: absolute;
+      width: 12px;
+      height: 12px;
+      top: 4px;
+      left: 4px;
+      border-radius: 50%;
+      background: rgba(211, 47, 47, 0.3);
+      animation: pulse 1.5s ease-out infinite;
+    }
+    
+    @keyframes pulse {
+      0% { 
+        transform: scale(1);
+        opacity: 0.8;
+      }
+      70% { 
+        transform: scale(3);
+        opacity: 0;
+      }
+      100% { 
+        transform: scale(1);
+        opacity: 0;
+      }
+    }
+    
+    #requestList {
+      flex: 1;
+      overflow-y: auto;
+    }
+    
+    #requestList::-webkit-scrollbar {
+      width: 6px;
+    }
+    
+    #requestList::-webkit-scrollbar-track {
+      background: #f1f1f1;
+    }
+    
+    #requestList::-webkit-scrollbar-thumb {
+      background: #d0d0d0;
+      border-radius: 3px;
+    }
+    
+    #requestList::-webkit-scrollbar-thumb:hover {
+      background: #999;
+    }
+    
+    @media (max-width: 768px) {
+      body {
+        flex-direction: column;
+      }
+      
+      #sidebar {
+        width: 100%;
+        max-height: 45vh;
+        border-right: 0;
+        border-bottom: 1px solid #e0e0e0;
+      }
+      
+      #map {
+        height: 55vh;
+      }
+      
+      .top-buttons {
+        gap: 8px;
+      }
+      
+      .top-buttons a {
+        min-width: 100px;
+        padding: 8px 10px;
+        font-size: 11px;
+      }
+    }
   </style>
 </head>
 <body>
